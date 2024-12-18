@@ -5,19 +5,19 @@
 typedef struct
 {
     char username[100];
-    char accountNumber[11];
-    char pin[5];
+    char accountNumber[15];
+    char pin[7];
     double balance;
 } ATMCard;
 
 int isIDAccount(char *accountNumber)
 {
-    if (strlen(accountNumber) != 10)
+    if (strlen(accountNumber) != 14)
     {
         return 0;
     }
 
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 14; i++)
     {
         if (accountNumber[i] < '0' || accountNumber[i] > '9')
         {
@@ -29,12 +29,12 @@ int isIDAccount(char *accountNumber)
 
 int isValidPIN(char *pin)
 {
-    if (strlen(pin) != 4)
+    if (strlen(pin) != 6)
     {
         return 0;
     }
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 6; i++)
     {
         if (pin[i] < '0' || pin[i] > '9')
         {
@@ -51,48 +51,46 @@ int isAccountBalance(double balance)
 
 void saveToFile(ATMCard card)
 {
-    FILE *file = fopen("account-number.dat", "a");
+    char filename[30];
+    snprintf(filename, sizeof(filename), "%s.dat", card.accountNumber);
+
+    FILE *file = fopen(filename, "w");
     if (file == NULL)
     {
-        printf("Khong the mo tep luu thong tin.\n");
+        printf("Khong the mo tep de luu thong tin.\n");
         return;
     }
     fprintf(file, "%s %s %s %.2f\n", card.username, card.accountNumber, card.pin, card.balance);
     fclose(file);
+    printf("Da tao file cho tai khoan: %s\n", filename);
 }
 
-int loadFromFile(ATMCard *cards, int *count)
+int loadFromFile(ATMCard *card, const char *accountNumber)
 {
-    FILE *file = fopen("account-number.dat", "r");
+    char filename[30];
+    snprintf(filename, sizeof(filename), "%s.dat", accountNumber);
+
+    FILE *file = fopen(filename, "r");
     if (file == NULL)
     {
         printf("Khong the mo tep de doc thong tin.\n");
         return 0;
     }
-    *count = 0;
-    while (fscanf(file, "%s %s %s %lf", cards[*count].username, cards[*count].accountNumber, cards[*count].pin, &cards[*count].balance) != EOF)
+
+    // Đọc thông tin từ file
+    if (fscanf(file, "%99s %14s %6s %lf", card->username, card->accountNumber, card->pin, &card->balance) != 4)
     {
-        (*count)++;
+        printf("Khong the doc du lieu tu tep.\n");
+        fclose(file);
+        return 0;
     }
     fclose(file);
     return 1;
 }
 
-void overwriteFile(ATMCard *cards, int count)
+void overwriteFile(ATMCard *card)
 {
-    FILE *file = fopen("account-number.dat", "w"); // Ghi đè toàn bộ tệp
-    if (file == NULL)
-    {
-        printf("Khong the mo tep de ghi thong tin.\n");
-        return;
-    }
-
-    // Ghi lại từng tài khoản vào tệp
-    for (int i = 0; i < count; i++)
-    {
-        fprintf(file, "%s %s %s %.2f\n", cards[i].username, cards[i].accountNumber, cards[i].pin, cards[i].balance);
-    }
-    fclose(file);
+    saveToFile(*card);
 }
 
 void withdrawMoney(ATMCard *card)
@@ -105,6 +103,7 @@ void withdrawMoney(ATMCard *card)
     {
         card->balance -= amount;
         printf("Rut tien thanh cong! So du con lai: %.2f VND\n", card->balance);
+        overwriteFile(card);
     }
     else
     {
@@ -114,73 +113,49 @@ void withdrawMoney(ATMCard *card)
 
 void transferMoney(ATMCard *card)
 {
-    char targetAccount[11];
+    char targetAccount[15];
     double amount;
-    int found = 0;
-
-    ATMCard cards[100];
-    int count = 0;
-
-    if (!loadFromFile(cards, &count))
-    {
-        printf("Khong the tai du lieu tu tep.\n");
-        return;
-    }
+    ATMCard targetCard;
 
     printf("Nhap so tai khoan nhan tien: ");
     scanf("%s", targetAccount);
 
-    // Tìm tài khoản đích trong danh sách
-    for (int i = 0; i < count; i++)
+    if (!loadFromFile(&targetCard, targetAccount))
     {
-        if (strcmp(cards[i].accountNumber, targetAccount) == 0)
-        {
-            printf("Nhap so tien muon chuyen: ");
-            scanf("%lf", &amount);
-
-            if (amount > 0 && amount <= card->balance)
-            {
-                // Thực hiện chuyển tiền
-                card->balance -= amount;    // Trừ tiền tài khoản của người gửi
-                cards[i].balance += amount; // Cộng tiền cho tài khoản đích
-
-                printf("Chuyen tien thanh cong!\n");
-
-                // Cập nhật danh sách tài khoản của người gửi trong mảng
-                for (int j = 0; j < count; j++)
-                {
-                    if (strcmp(cards[j].accountNumber, card->accountNumber) == 0)
-                    {
-                        cards[j].balance = card->balance;
-                        break;
-                    }
-                }
-
-                // Ghi lại tất cả dữ liệu vào tệp
-                overwriteFile(cards, count);
-                return;
-            }
-            else
-            {
-                printf("So tien khong hop le hoac vuot qua so du.\n");
-                return;
-            }
-        }
+        printf("So tai khoan khong ton tai.\n");
+        return;
     }
 
-    printf("So tai khoan khong ton tai.\n");
+    printf("Nhap so tien muon chuyen: ");
+    scanf("%lf", &amount);
+
+    if (amount > 0 && amount <= card->balance)
+    {
+        card->balance -= amount;
+        targetCard.balance += amount;
+        printf("Chuyen tien thanh cong!\n");
+
+        // Cập nhật file cho cả hai tài khoản
+        overwriteFile(card);
+        overwriteFile(&targetCard);
+    }
+    else
+    {
+        printf("So tien khong hop le hoac vuot qua so du.\n");
+    }
 }
 
 void changePIN(ATMCard *card)
 {
-    char newPIN[5];
-    printf("Nhap ma PIN moi (4 chu so): ");
-    scanf("%4s", newPIN);
+    char newPIN[7];
+    printf("Nhap ma PIN moi (6 chu so): ");
+    scanf("%6s", newPIN);
 
     if (isValidPIN(newPIN))
     {
         strcpy(card->pin, newPIN);
         printf("Doi ma PIN thanh cong!\n");
+        overwriteFile(card);
     }
     else
     {
@@ -190,8 +165,8 @@ void changePIN(ATMCard *card)
 
 int login(ATMCard *currentCard)
 {
-    char accountNumber[11];
-    char pin[5];
+    char accountNumber[15];
+    char pin[7];
     int found = 0;
 
     printf("===========================\n");
@@ -204,18 +179,17 @@ int login(ATMCard *currentCard)
     printf("Nhap ma PIN: ");
     scanf("%s", pin);
 
-    ATMCard cards[100];
-    int count = 0;
-    loadFromFile(cards, &count);
-
-    for (int i = 0; i < count; i++)
+    // Tải thông tin tài khoản từ file
+    if (!loadFromFile(currentCard, accountNumber))
     {
-        if (strcmp(cards[i].accountNumber, accountNumber) == 0 && strcmp(cards[i].pin, pin) == 0)
-        {
-            *currentCard = cards[i];
-            found = 1;
-            break;
-        }
+        printf("Khong the tai du lieu tu tep.\n");
+        return 0;
+    }
+
+    // Kiểm tra thông tin đăng nhập
+    if (strcmp(currentCard->accountNumber, accountNumber) == 0 && strcmp(currentCard->pin, pin) == 0)
+    {
+        found = 1; // Đăng nhập thành công
     }
 
     if (!found)
@@ -227,8 +201,7 @@ int login(ATMCard *currentCard)
 
 int main()
 {
-    int choice, count = 0;
-    ATMCard cards[100];
+    int choice;
     ATMCard currentCard;
     int loggedIn = 0;
 
@@ -253,9 +226,9 @@ int main()
                 printf("===========================\n");
                 printf("Nhap ho va ten: ");
                 scanf(" %[^\n]", currentCard.username);
-                printf("Nhap so tai khoan (10 chu so): ");
+                printf("Nhap so tai khoan (14 chu so): ");
                 scanf("%s", currentCard.accountNumber);
-                printf("Nhap ma PIN (4 chu so): ");
+                printf("Nhap ma PIN (6 chu so): ");
                 scanf("%s", currentCard.pin);
                 printf("Nhap so tien ban dau: ");
                 scanf("%lf", &currentCard.balance);
@@ -300,15 +273,12 @@ int main()
             {
             case 1:
                 withdrawMoney(&currentCard);
-                overwriteFile(cards, count);
                 break;
             case 2:
                 transferMoney(&currentCard);
-                overwriteFile(cards, count);
                 break;
             case 3:
                 changePIN(&currentCard);
-                overwriteFile(cards, count);
                 break;
             case 4:
                 printf("===========================\n");
@@ -322,7 +292,7 @@ int main()
                 {
                     currentCard.balance += depositAmount;
                     printf("Gui tien thanh cong! So du hien tai: %.2f VND\n", currentCard.balance);
-                    overwriteFile(cards, count);
+                    overwriteFile(&currentCard);
                 }
                 else
                 {
