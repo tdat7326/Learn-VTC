@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <conio.h>
+#include <time.h>
 
 typedef struct
 {
@@ -9,6 +11,78 @@ typedef struct
     char pin[7];
     double balance;
 } ATMCard;
+
+typedef struct Transaction
+{
+    char type[20]; // "Chuyen tien", "Gui tien", "Rut tien"
+    double amount;
+    time_t timestamp;
+} Transaction;
+
+#define MAX_TRANSACTIONS 100
+Transaction transactions[MAX_TRANSACTIONS];
+int transactionCount = 0;
+
+void saveTransactionHistory(ATMCard *card);
+void recordTransaction(const char *type, double amount, ATMCard *card);
+void displayTransactionHistory(ATMCard *card);
+int loadFromFile(ATMCard *card, const char *accountNumber);
+void overwriteFile(ATMCard *card);
+void printTransactionReceipt(const char *atmID, const char *cardNumber, const char *sourceAccount,
+                             const char *targetAccount, double amount, double remainingBalance, const char *transactionID);
+
+void printTransactionReceipt(const char *atmID, const char *cardNumber, const char *sourceAccount,
+                             const char *targetAccount, double amount, double remainingBalance, const char *transactionID)
+{
+    // Lấy thời gian hiện tại
+    time_t t;
+    time(&t);
+    struct tm *timeinfo = localtime(&t);
+
+    // In biên lai giao dịch
+    printf("==========================================\n");
+    printf("            BIEN LAI GIAO DICH ATM        \n");
+    printf("==========================================\n");
+    printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
+           timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
+           timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    printf("ATM ID: %s\n", atmID);
+    printf("SO THE: %s\n", cardNumber);
+    printf("------------------------------------------\n");
+    printf("GIAO DICH CHUYEN KHOAN\n");
+    printf("TAI KHOAN CHUYEN TIEN: %s\n", sourceAccount);
+    printf("TAI KHOAN NHAN TIEN: %s\n", targetAccount);
+    printf("SO TIEN: %.2f VND\n", amount);
+    printf("SO TAI KHOAN: %.2f VND\n", remainingBalance);
+    printf("PHI: 0.00 VND\n");
+    printf("ID GIAO DICH: %s\n", transactionID);
+    printf("------------------------------------------\n");
+    printf("                *** THANK YOU ***          \n");
+}
+
+// Định nghĩa hàm lưu lịch sử giao dịch
+void saveTransactionHistory(ATMCard *card)
+{
+    char filename[30];
+    snprintf(filename, sizeof(filename), "%s.dat", card->accountNumber); // Sử dụng file chính để lưu lịch sử
+
+    FILE *file = fopen(filename, "a"); // Mở file với chế độ thêm
+    if (file == NULL)
+    {
+        printf("Khong the mo tep de luu lich su giao dich.\n");
+        return;
+    }
+
+    // Ghi lại giao dịch vào file chính
+    for (int i = 0; i < transactionCount; i++)
+    {
+        fprintf(file, "Giao dich: %s, So tien: %.2f VND, Thoi gian: %s",
+                transactions[i].type,
+                transactions[i].amount,
+                ctime(&transactions[i].timestamp)); // Thêm thời gian giao dịch
+    }
+    fclose(file);
+}
 
 int isIDAccount(char *accountNumber)
 {
@@ -49,6 +123,21 @@ int isAccountBalance(double balance)
     return balance >= 50000;
 }
 
+// Định nghĩa hàm ghi lại giao dịch
+void recordTransaction(const char *type, double amount, ATMCard *card)
+{
+    if (transactionCount < MAX_TRANSACTIONS)
+    {
+        strcpy(transactions[transactionCount].type, type);
+        transactions[transactionCount].amount = amount;
+        transactions[transactionCount].timestamp = time(NULL);
+        transactionCount++;
+    }
+
+    // Lưu lịch sử giao dịch vào file khi có giao dịch mới
+    saveTransactionHistory(card);
+}
+
 void saveToFile(ATMCard card)
 {
     char filename[30];
@@ -62,7 +151,6 @@ void saveToFile(ATMCard card)
     }
     fprintf(file, "%s %s %s %.2f\n", card.username, card.accountNumber, card.pin, card.balance);
     fclose(file);
-    printf("Da tao file cho tai khoan: %s\n", filename);
 }
 
 int loadFromFile(ATMCard *card, const char *accountNumber)
@@ -103,6 +191,7 @@ void withdrawMoney(ATMCard *card)
     {
         card->balance -= amount;
         printf("Rut tien thanh cong! So du con lai: %.2f VND\n", card->balance);
+        recordTransaction("Rut tien", amount, card); // Ghi lại giao dịch rút tiền
         overwriteFile(card);
     }
     else
@@ -131,13 +220,19 @@ void transferMoney(ATMCard *card)
 
     if (amount > 0 && amount <= card->balance)
     {
-        card->balance -= amount;
-        targetCard.balance += amount;
+        card->balance -= amount;      // Giảm số dư của tài khoản chuyển tiền
+        targetCard.balance += amount; // Tăng số dư của tài khoản nhận tiền
         printf("Chuyen tien thanh cong!\n");
+
+        // Ghi lại giao dịch
+        recordTransaction("Chuyen tien", amount, card);      // Ghi lại giao dịch chuyển tiền
+        recordTransaction("Nhan tien", amount, &targetCard); // Ghi lại giao dịch nhận tiền
 
         // Cập nhật file cho cả hai tài khoản
         overwriteFile(card);
         overwriteFile(&targetCard);
+
+        printf("So du con lai: %.2f VND\n", card->balance);
     }
     else
     {
@@ -163,6 +258,25 @@ void changePIN(ATMCard *card)
     }
 }
 
+void depositMoney(ATMCard *card)
+{
+    double depositAmount;
+    printf("Nhap so tien muon gui: ");
+    scanf("%lf", &depositAmount);
+
+    if (depositAmount > 0)
+    {
+        card->balance += depositAmount;
+        printf("Gui tien thanh cong! So du hien tai: %.2f VND\n", card->balance);
+        recordTransaction("Gui tien", depositAmount, card); // Ghi lại giao dịch gửi tiền
+        overwriteFile(card);
+    }
+    else
+    {
+        printf("So tien gui khong hop le.\n");
+    }
+}
+
 int login(ATMCard *currentCard)
 {
     char accountNumber[15];
@@ -177,7 +291,16 @@ int login(ATMCard *currentCard)
     printf("Nhap so tai khoan: ");
     scanf("%s", accountNumber);
     printf("Nhap ma PIN: ");
-    scanf("%s", pin);
+    // Nhập PIN và hiển thị dấu *
+    for (int i = 0; i < 6; i++)
+    {
+        pin[i] = getch();   // Đọc ký tự mà không hiển thị
+        if (pin[i] == '\r') // Nếu nhấn Enter, thoát vòng lặp
+            break;
+        printf("*"); // Hiển thị dấu *
+    }
+    pin[6] = '\0'; // Kết thúc chuỗi
+    printf("\n");
 
     // Tải thông tin tài khoản từ file
     if (!loadFromFile(currentCard, accountNumber))
@@ -199,11 +322,59 @@ int login(ATMCard *currentCard)
     return found;
 }
 
+void displayTransactionHistory(ATMCard *card)
+{
+    char filename[30];
+    snprintf(filename, sizeof(filename), "%s_transactions.dat", card->accountNumber);
+
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        printf("Khong co lich su giao dich nao.\n");
+        return;
+    }
+
+    printf("\nLich su giao dich:\n");
+    char line[256];
+    while (fgets(line, sizeof(line), file))
+    {
+        // Chỉ in ra giao dịch "Nhan tien" cho tài khoản nhận tiền
+        if (strstr(line, "Nhan tien") != NULL)
+        {
+            printf("%s", line);
+        }
+    }
+    fclose(file);
+}
+
+void displayAccountInfo(ATMCard *card)
+{
+    printf("\n=========================================\n");
+    printf("          VTC Academy Bank\n");
+    printf("=========================================\n");
+    printf("            ATM Machine\n");
+    printf("-----------------------------------------\n");
+    printf("Account No:   %s\n", card->accountNumber);
+    printf("Pin Code:     ******\n");
+    printf("-----------------------------------------\n");
+    printf("Account Name: %s\n", card->username);
+    printf("-----------------------------------------\n");
+}
+
 int main()
 {
     int choice;
     ATMCard currentCard;
     int loggedIn = 0;
+    char createATM;
+    const char *atmID = "12700005";
+    const char *cardNumber = "1234XXXXXXXX5678"; // Chỉ hiển thị một phần số thẻ để bảo mật
+    const char *sourceAccount = "12345678901234";
+    const char *targetAccount = "100001945349";
+    double amount = 340000.00;
+    double remainingBalance = 126078900.00;
+    const char *transactionID = "TX123456789";
+    printTransactionReceipt(atmID, cardNumber, sourceAccount, targetAccount, amount, remainingBalance, transactionID);
 
     while (1)
     {
@@ -221,22 +392,35 @@ int main()
             switch (choice)
             {
             case 1:
-                printf("===========================\n");
-                printf("VTC Academy Bank\n");
-                printf("===========================\n");
+                printf("=========================================\n");
+                printf("          VTC Academy Bank\n");
+                printf("=========================================\n");
+                printf("\n          Create ATM Cards\n");
+                printf("\n-----------------------------------------\n");
+
                 printf("Nhap ho va ten: ");
                 scanf(" %[^\n]", currentCard.username);
-                printf("Nhap so tai khoan (14 chu so): ");
+                printf("Nhap so tai khoan(14 so): ");
                 scanf("%s", currentCard.accountNumber);
-                printf("Nhap ma PIN (6 chu so): ");
+                printf("Nhap so pin(6 so): ");
                 scanf("%s", currentCard.pin);
                 printf("Nhap so tien ban dau: ");
                 scanf("%lf", &currentCard.balance);
+                printf("-----------------------------------------\n");
 
                 if (isIDAccount(currentCard.accountNumber) && isValidPIN(currentCard.pin) && isAccountBalance(currentCard.balance))
                 {
-                    saveToFile(currentCard);
-                    printf("Tao tai khoan thanh cong!\n");
+                    printf("Ban co muon tao The ATM khong? (Y/N): ");
+                    scanf(" %c", &createATM);
+                    if (createATM == 'Y' || createATM == 'y')
+                    {
+                        saveToFile(currentCard);
+                        printf("Tao tai khoan thanh cong!\n");
+                    }
+                    else
+                    {
+                        printf("Khong tao tai khoan.\n");
+                    }
                 }
                 else
                 {
@@ -246,6 +430,10 @@ int main()
 
             case 2:
                 loggedIn = login(&currentCard);
+                if (loggedIn)
+                {
+                    displayAccountInfo(&currentCard); // Hiển thị thông tin tài khoản sau khi đăng nhập thành công
+                }
                 break;
 
             case 3:
@@ -258,14 +446,13 @@ int main()
         }
         else
         {
-            printf("===========================\n");
-            printf("VTC Academy Bank\n");
-            printf("===========================\n");
             printf("1. Rut tien\n");
             printf("2. Chuyen tien\n");
             printf("3. Doi ma PIN\n");
             printf("4. Gui tien\n");
-            printf("5. Dang xuat\n");
+            printf("5. Kiem tra so du\n");
+            printf("6. Lich su giao dich\n");
+            printf("7. Dang xuat\n");
             printf("Nhap lua chon cua ban: ");
             scanf("%d", &choice);
 
@@ -300,6 +487,16 @@ int main()
                 }
                 break;
             case 5:
+                printf("\n=========================================\n");
+                printf("          VTC Academy Bank\n");
+                printf("=========================================\n");
+                printf("So du hien tai: %.2f VND\n", currentCard.balance);
+                printf("-----------------------------------------\n");
+                break;
+            case 6:
+                displayTransactionHistory(&currentCard);
+                break;
+            case 7:
                 loggedIn = 0;
                 printf("Dang xuat thanh cong!\n");
                 break;
