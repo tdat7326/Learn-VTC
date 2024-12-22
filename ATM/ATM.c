@@ -181,23 +181,62 @@ void overwriteFile(ATMCard *card)
     saveToFile(*card);
 }
 
+void printReceipt(const char *transactionType, double amount, double balance, const char *accountNumber)
+{
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    char dateTime[100];
+    strftime(dateTime, sizeof(dateTime), "%d-%m-%Y %H:%M:%S", t);
+
+    printf("\n=========================================\n");
+    printf("             BIEN LAI GIAO DICH\n");
+    printf("=========================================\n");
+    printf("Thoi gian: %s\n", dateTime);
+    printf("So tai khoan: %s\n", accountNumber);
+    printf("Loai giao dich: %s\n", transactionType);
+    printf("So tien: %.2f VND\n", amount);
+    printf("So du hien tai: %.2f VND\n", balance);
+    printf("=========================================\n");
+    printf("        Cam on quy khach da su dung\n");
+    printf("        dich vu cua chung toi!\n");
+    printf("=========================================\n");
+}
+
 void withdrawMoney(ATMCard *card)
 {
     double amount;
     printf("Nhap so tien muon rut: ");
     scanf("%lf", &amount);
 
-    if (amount > 0 && amount <= card->balance)
+    // Kiểm tra số tiền hợp lệ
+    if (amount <= 0)
     {
-        card->balance -= amount;
-        printf("Rut tien thanh cong! So du con lai: %.2f VND\n", card->balance);
-        recordTransaction("Rut tien", amount, card); // Ghi lại giao dịch rút tiền
-        overwriteFile(card);
+        printf("So tien phai lon hon 0.\n");
+        return;
     }
-    else
+
+    if (amount > card->balance)
     {
-        printf("So tien khong hop le hoac vuot qua so du.\n");
+        printf("So tien rut vuot qua so du hien tai.\n");
+        return;
     }
+
+    if (amount < 50000)
+    { // Điều kiện giả định số tiền rút tối thiểu là 50.000 VND
+        printf("So tien rut toi thieu la 50.000 VND.\n");
+        return;
+    }
+
+    // Trừ tiền trong tài khoản
+    card->balance -= amount;
+
+    // Ghi lại giao dịch
+    printf("Rut tien thanh cong! So du con lai: %.2f VND\n", card->balance);
+    recordTransaction("Rut tien", amount, card);
+    overwriteFile(card);
+
+    // In biên lai giao dịch
+    printReceipt("Rut tien", amount, card->balance, card->accountNumber);
 }
 
 void transferMoney(ATMCard *card)
@@ -220,19 +259,15 @@ void transferMoney(ATMCard *card)
 
     if (amount > 0 && amount <= card->balance)
     {
-        card->balance -= amount;      // Giảm số dư của tài khoản chuyển tiền
-        targetCard.balance += amount; // Tăng số dư của tài khoản nhận tiền
+        card->balance -= amount;
+        targetCard.balance += amount;
         printf("Chuyen tien thanh cong!\n");
-
-        // Ghi lại giao dịch
-        recordTransaction("Chuyen tien", amount, card);      // Ghi lại giao dịch chuyển tiền
-        recordTransaction("Nhan tien", amount, &targetCard); // Ghi lại giao dịch nhận tiền
-
-        // Cập nhật file cho cả hai tài khoản
+        recordTransaction("Chuyen tien", amount, card);
+        recordTransaction("Nhan tien", amount, &targetCard);
         overwriteFile(card);
         overwriteFile(&targetCard);
-
         printf("So du con lai: %.2f VND\n", card->balance);
+        printReceipt("Chuyen tien", amount, card->balance, card->accountNumber); // In biên lai
     }
     else
     {
@@ -268,8 +303,9 @@ void depositMoney(ATMCard *card)
     {
         card->balance += depositAmount;
         printf("Gui tien thanh cong! So du hien tai: %.2f VND\n", card->balance);
-        recordTransaction("Gui tien", depositAmount, card); // Ghi lại giao dịch gửi tiền
+        recordTransaction("Gui tien", depositAmount, card);
         overwriteFile(card);
+        printReceipt("Gui tien", depositAmount, card->balance, card->accountNumber); // In biên lai
     }
     else
     {
