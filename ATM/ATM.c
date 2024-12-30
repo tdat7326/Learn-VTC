@@ -9,10 +9,12 @@ int main()
 {
     char accountNumber[15];
     int choice;
+    char pin[7];
     ATMCard currentCard;
     int loggedIn = 0;
     char createATM;
     int valid = 0;
+    int found = 0;
 
     while (1)
     {
@@ -38,21 +40,33 @@ int main()
 
                 printf("Nhap ho va ten: ");
                 scanf(" %[^\n]", currentCard.username);
-                printf("\nNhap so tai khoan(14 so): ");
-                getAccountNumber(accountNumber);
-                valid = isIDAccount(accountNumber);
-                if (valid)
+                if (!isValidUsername(currentCard.username))
                 {
-                    printf("\nSo tai khoan hop le.\n");
+                    printf("Ten tai khoan khong hop le. Phai co dau cach va tren 10 ky tu.\n");
+                    break;
                 }
 
-                printf("\nNhap so pin(6 so): ");
-                scanf("%s", currentCard.pin);
+                getAccountNumber(accountNumber, 14);
+                strcpy(currentCard.accountNumber, accountNumber); // Sao chép số tài khoản vào currentCard
+                getPIN(currentCard.pin, 6);
                 printf("\nNhap so tien ban dau: ");
                 scanf("%lf", &currentCard.balance);
                 printf("-----------------------------------------\n");
 
-                if (isIDAccount(currentCard.accountNumber) && isValidPIN(currentCard.pin) && isAccountBalance(currentCard.balance))
+                if (!isIDAccount(currentCard.accountNumber))
+                {
+                    printf("So tai khoan khong hop le.\n");
+                }
+                else if (!isValidPIN(currentCard.pin))
+                {
+                    printf("Ma PIN khong hop le.\n");
+                }
+                else if (!isAccountBalance(currentCard.balance))
+                {
+                    printf("So du nap vao tai khoan phai > 50.000 VND.\n");
+                }
+
+                else
                 {
                     printf("Ban co muon tao The ATM khong? (Y/N): ");
                     scanf(" %c", &createATM);
@@ -66,14 +80,18 @@ int main()
                         printf("Khong tao tai khoan.\n");
                     }
                 }
-                else
-                {
-                    printf("Thong tin khong hop le.\n");
-                }
                 break;
 
             case 2:
-                loggedIn = login(&currentCard);
+                if (login(&currentCard))
+                {
+                    printf("Dang nhap thanh cong!\n");
+                    loggedIn = 1; // Đặt loggedIn thành 1 khi đăng nhập thành công
+                }
+                else
+                {
+                    printf("Dang nhap that bai.\n");
+                }
                 break;
 
             case 3:

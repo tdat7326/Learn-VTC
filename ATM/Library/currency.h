@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <conio.h>
+#include <direct.h>
 #include <time.h>
 #include <sys/stat.h>
 
@@ -34,19 +35,24 @@ char *formatCurrency(double amount);
 void printTransactionReceipt(const char *atmID, const char *cardNumber, const char *sourceAccount,
                              const char *targetAccount, double amount, double remainingBalance, const char *transactionID, const char *vatAccountNumber, double vatAmount, const char *type);
 int isIDAccount(char *accountNumber);
-int isValidPIN(char *pin);
+void getAccountNumber(char *accountNumber, int maxLength);
+int isValidUsername(char *username);
 int isAccountBalance(double balance);
-double calculateVAT(double amount);
 void saveToFile(ATMCard card);
 void withdrawMoney(ATMCard *card);
 void transferMoney(ATMCard *card);
 void changePIN(ATMCard *card);
 void depositMoney(ATMCard *card);
 int login(ATMCard *currentCard);
-void checkBalance(ATMCard *card);
 void displayMenu(ATMCard *card);
 void displayTransactionHistory(ATMCard *card);
 void displayAccountInfo(ATMCard *card);
+void waitForKeyPress();
+void waitForKeyPress()
+{
+    printf("\nBam phim bat ky de quay lai...\n");
+    getch(); // Chờ người dùng bấm phím bất kỳ
+}
 
 void recordTransaction(const char *type, double amount, ATMCard *card, const char *targetAccount)
 {
@@ -68,8 +74,16 @@ void recordTransaction(const char *type, double amount, ATMCard *card, const cha
     // Ghi lại giao dịch vào file
     time_t now;
     time(&now);
-    fprintf(file, "Giao dich: %s, So tien: %.2f VND, Tai khoan: %s, Thoi gian: %s",
-            type, amount, card->accountNumber, ctime(&now)); // Thêm thời gian giao dịch
+    if (targetAccount != NULL)
+    {
+        fprintf(file, "Giao dich: %s, So tien: %.2f VND, Tai khoan: %s, Thoi gian: %s",
+                type, amount, targetAccount, ctime(&now)); // Thêm thời gian giao dịch và tài khoản đích
+    }
+    else
+    {
+        fprintf(file, "Giao dich: %s, So tien: %.2f VND, Tai khoan: %s, Thoi gian: %s",
+                type, amount, card->accountNumber, ctime(&now)); // Thêm thời gian giao dịch
+    }
     fclose(file);
 
     // Cập nhật lịch sử giao dịch trong bộ nhớ
@@ -79,6 +93,7 @@ void recordTransaction(const char *type, double amount, ATMCard *card, const cha
     transactionCount++; // Tăng số lượng giao dịch
 }
 
+// Hàm xác nhận in biên lai
 int confirmPrintReceipt()
 {
     char choice;
@@ -147,7 +162,6 @@ void printTransactionReceipt(const char *atmID, const char *cardNumber, const ch
     time_t t;
     time(&t);
     struct tm *timeinfo = localtime(&t);
-    char choice;
 
     // Xác nhận in biên lai
     if (!confirmPrintReceipt())
@@ -155,68 +169,63 @@ void printTransactionReceipt(const char *atmID, const char *cardNumber, const ch
         printf("Khong in bien lai.\n");
         return; // Nếu không in, thoát khỏi hàm
     }
-    do
+
+    if (strcmp(type, "Chuyen tien") == 0) // Kiểm tra loại giao dịch
     {
-        if (strcmp(type, "Chuyen tien") == 0) // Kiểm tra loại giao dịch
-        {
-            // In biên lai giao dịch
-            printf("==========================================\n");
-            printf("            BIEN LAI GIAO DICH ATM        \n");
-            printf("==========================================\n");
-            printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
-                   timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
-                   timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-            printf("SO THE: %s\n", cardNumber);
-            printf("------------------------------------------\n");
-            printf("      GIAO DICH CHUYEN KHOAN\n");
-            printf("Tai khoan chuyen tien: %s\n", sourceAccount);
-            printf("Tai khoan nhan tien: %s\n", targetAccount);
-            printf("So tien: %s\n", formatCurrency(amount));                   // Sử dụng hàm formatCurrency
-            printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
-            printf("ID GIAO DICH: %s\n", transactionID);
-            printf("------------------------------------------\n");
-            printf("               *** THANK YOU ***          \n");
-        }
-        else if (strcmp(type, "Rut tien") == 0) // Kiểm tra loại giao dịch
-        {
-            // In biên lai RUT TIEN
-            printf("==========================================\n");
-            printf("            BIEN LAI GIAO DICH ATM        \n");
-            printf("==========================================\n");
-            printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
-                   timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
-                   timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-            printf("SO THE: %s\n", cardNumber);
-            printf("------------------------------------------\n");
-            printf("      GIAO DICH RUT TIEN\n");
-            printf("So tien: %s\n", formatCurrency(amount));                   // Sử dụng hàm formatCurrency
-            printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
-            printf("ID GIAO DICH: %s\n", transactionID);
-            printf("------------------------------------------\n");
-            printf("               *** THANK YOU ***          \n");
-        }
-        else if (strcmp(type, "Gui tien") == 0) // Kiểm tra loại giao dịch
-        {
-            // In biên lai gui tien
-            printf("==========================================\n");
-            printf("            BIEN LAI GIAO DICH ATM        \n");
-            printf("==========================================\n");
-            printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
-                   timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
-                   timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-            printf("SO THE: %s\n", cardNumber);
-            printf("------------------------------------------\n");
-            printf("      GIAO DICH GUI TIEN\n");
-            printf("So tien gui: %s\n", formatCurrency(amount));               // Sử dụng hàm formatCurrency
-            printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
-            printf("ID GIAO DICH: %s\n", transactionID);
-            printf("------------------------------------------\n");
-            printf("               *** THANK YOU ***          \n");
-        }
-        // Hỏi người dùng có muốn thoát không
-        printf("Ban co muon giao dich tiep khong? (Y/N): ");
-        scanf(" %c", &choice);
-    } while (choice != 'n' && choice != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
+        // In biên lai giao dịch
+        printf("==========================================\n");
+        printf("            BIEN LAI GIAO DICH ATM        \n");
+        printf("==========================================\n");
+        printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
+               timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
+               timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        printf("SO THE: %s\n", cardNumber);
+        printf("------------------------------------------\n");
+        printf("      GIAO DICH CHUYEN KHOAN\n");
+        printf("Tai khoan chuyen tien: %s\n", sourceAccount);
+        printf("Tai khoan nhan tien: %s\n", targetAccount);
+        printf("So tien: %s\n", formatCurrency(amount));                   // Sử dụng hàm formatCurrency
+        printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
+        printf("ID GIAO DICH: %s\n", transactionID);
+        printf("------------------------------------------\n");
+        printf("               *** THANK YOU ***          \n");
+    }
+    else if (strcmp(type, "Rut tien") == 0) // Kiểm tra loại giao dịch
+    {
+        // In biên lai RUT TIEN
+        printf("==========================================\n");
+        printf("            BIEN LAI GIAO DICH ATM        \n");
+        printf("==========================================\n");
+        printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
+               timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
+               timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        printf("SO THE: %s\n", cardNumber);
+        printf("------------------------------------------\n");
+        printf("      GIAO DICH RUT TIEN\n");
+        printf("So tien: %s\n", formatCurrency(amount));                   // Sử dụng hàm formatCurrency
+        printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
+        printf("ID GIAO DICH: %s\n", transactionID);
+        printf("------------------------------------------\n");
+        printf("               *** THANK YOU ***          \n");
+    }
+    else if (strcmp(type, "Gui tien") == 0) // Kiểm tra loại giao dịch
+    {
+        // In biên lai gui tien
+        printf("==========================================\n");
+        printf("            BIEN LAI GIAO DICH ATM        \n");
+        printf("==========================================\n");
+        printf("NGAY G/D: %02d/%02d/%d %02d:%02d:%02d\n",
+               timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900,
+               timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        printf("SO THE: %s\n", cardNumber);
+        printf("------------------------------------------\n");
+        printf("      GIAO DICH GUI TIEN\n");
+        printf("So tien gui: %s\n", formatCurrency(amount));               // Sử dụng hàm formatCurrency
+        printf("So du tai khoan: %s\n", formatCurrency(remainingBalance)); // Sử dụng hàm formatCurrency
+        printf("ID GIAO DICH: %s\n", transactionID);
+        printf("------------------------------------------\n");
+        printf("               *** THANK YOU ***          \n");
+    }
 }
 
 // Định nghĩa hàm lưu lịch sử giao dịch
@@ -243,9 +252,10 @@ void saveTransactionHistory(ATMCard *card)
     fclose(file);
 }
 
+// Hàm kiểm tra ký tự có phải là số không
 int isNumber(char c)
 {
-    return (c >= '0' && c <= '9'); // Kiểm tra xem có phải là chữ số không
+    return (c >= '0' && c <= '9');
 }
 
 int isIDAccount(char *accountNumber)
@@ -265,58 +275,80 @@ int isIDAccount(char *accountNumber)
     return 1;
 }
 
-void getAccountNumber(char *accountNumber)
+// Hàm nhập số tài khoản với độ dài giới hạn
+void getAccountNumber(char *accountNumber, int maxLength)
 {
     int i = 0;
     char ch;
 
-    while (i < 14) // Chỉ cho nhập 14 ký tự
+    while (1)
     {
-        ch = getchar(); // Đọc từng ký tự từ bàn phím
-        if (ch == '\n') // Dừng nếu nhấn Enter
-            continue;
-
-        if (isNumber(ch)) // Kiểm tra nếu là số
+        i = 0;
+        printf("Nhap so tai khoan (14 chu so): ");
+        while (i < maxLength)
         {
-            accountNumber[i++] = ch; // Ghi ký tự vào accountNumber
-            putchar(ch);             // In ký tự ra màn hình
+            ch = getch();   // Đọc từng ký tự từ bàn phím mà không hiển thị
+            if (ch == '\r') // Dừng nếu nhấn Enter
+                break;
+
+            if (isNumber(ch)) // Kiểm tra nếu là số
+            {
+                accountNumber[i++] = ch; // Ghi ký tự vào accountNumber
+                putchar(ch);             // In ký tự ra màn hình
+            }
+        }
+        accountNumber[i] = '\0'; // Đảm bảo chuỗi kết thúc đúng
+        printf("\n");
+
+        // Kiểm tra độ dài của số tài khoản
+        if (i == 14)
+        {
+            break; // Thoát khỏi vòng lặp nếu nhập đúng 14 chữ số
         }
         else
         {
-            printf("\nChi duoc nhap so, vui long nhap lai: ");
-            while (getchar() != '\n')
-                ; // Xóa buffer nếu có ký tự không hợp lệ
+            printf("So tai khoan phai co dung 14 chu so. Vui long nhap lai.\n");
         }
     }
     accountNumber[i] = '\0'; // Đảm bảo chuỗi kết thúc đúng
     printf("\n");
 }
 
-void getPIN(char *pin)
+// Hàm nhập mã PIN với độ dài giới hạn
+void getPIN(char *pin, int maxLength)
 {
     int i = 0;
     char ch;
 
-    while (i < 6) // Chỉ cho nhập 6 ký tự
+    while (1)
     {
-        ch = getchar(); // Đọc từng ký tự từ bàn phím
-        if (ch == '\n') // Dừng nếu nhấn Enter
-            continue;
-
-        if (isNumber(ch)) // Kiểm tra nếu là số
+        i = 0;
+        printf("Nhap ma PIN (6 chu so): ");
+        while (i < maxLength)
         {
-            pin[i++] = ch; // Ghi ký tự vào pin
-            putchar(ch);   // In ký tự ra màn hình
+            ch = getch();   // Đọc từng ký tự từ bàn phím mà không hiển thị
+            if (ch == '\r') // Dừng nếu nhấn Enter
+                break;
+
+            if (isNumber(ch)) // Kiểm tra nếu là số
+            {
+                pin[i++] = ch; // Ghi ký tự vào pin
+                putchar('*');  // Hiển thị dấu *
+            }
+        }
+        pin[i] = '\0'; // Đảm bảo chuỗi kết thúc đúng
+        printf("\n");
+
+        // Kiểm tra độ dài của mã PIN
+        if (i == 6)
+        {
+            break; // Thoát khỏi vòng lặp nếu nhập đúng 6 chữ số
         }
         else
         {
-            printf("\nChi duoc nhap so, vui long nhap lai: ");
-            while (getchar() != '\n')
-                ; // Xóa buffer nếu có ký tự không hợp lệ
+            printf("Ma PIN phai co dung 6 chu so. Vui long nhap lai.\n");
         }
     }
-    pin[i] = '\0'; // Đảm bảo chuỗi kết thúc đúng
-    printf("\n");
 }
 
 int isValidPIN(char *pin)
@@ -336,6 +368,27 @@ int isValidPIN(char *pin)
     return 1;
 }
 
+// Hàm kiểm tra tên tài khoản hợp lệ
+int isValidUsername(char *username)
+{
+    if (strlen(username) <= 10)
+    {
+        return 0;
+    }
+
+    int hasSpace = 0;
+    for (int i = 0; i < strlen(username); i++)
+    {
+        if (username[i] == ' ')
+        {
+            hasSpace = 1;
+            break;
+        }
+    }
+
+    return hasSpace;
+}
+
 int isAccountBalance(double balance)
 {
     return balance >= 50000;
@@ -347,6 +400,7 @@ double calculateVAT(double amount)
     return amount * VAT_RATE;
 }
 
+// Hàm lưu thông tin tài khoản vào file
 void saveToFile(ATMCard card)
 {
     char filename[30];
@@ -358,10 +412,11 @@ void saveToFile(ATMCard card)
         printf("Khong the mo tep de luu thong tin.\n");
         return;
     }
-    fprintf(file, "%s %s %s %.2f\n", card.username, card.accountNumber, card.pin, card.balance);
+    fprintf(file, "%s\n%s\n%s\n%.2f\n", card.username, card.accountNumber, card.pin, card.balance);
     fclose(file);
 }
 
+// Hàm đọc thông tin tài khoản từ file
 int loadFromFile(ATMCard *card, const char *accountNumber)
 {
     char filename[30];
@@ -375,7 +430,7 @@ int loadFromFile(ATMCard *card, const char *accountNumber)
     }
 
     // Đọc thông tin từ file
-    if (fscanf(file, "%99s %14s %6s %lf", card->username, card->accountNumber, card->pin, &card->balance) != 4)
+    if (fscanf(file, "%99[^\n]\n%14s\n%6s\n%lf", card->username, card->accountNumber, card->pin, &card->balance) != 4)
     {
         printf("Khong the doc du lieu tu tep.\n");
         fclose(file);
@@ -408,9 +463,9 @@ void withdrawMoney(ATMCard *card)
         printf("3. 500.000 VND\n");
         printf("4. 1.000.000 VND\n");
         printf("5. 2.000.000 VND\n");
-        printf("6. Other number\n");
+        printf("6. So tien khac\n");
         printf("-----------------------------------------\n");
-        printf("Your choice: ");
+        printf("Nhap lua chon: ");
         scanf("%d", &choice);
 
         // Xác định số tiền dựa trên lựa chọn
@@ -481,7 +536,6 @@ void withdrawMoney(ATMCard *card)
 
         // Hỏi người dùng có muốn giao dịch tiếp không
         printf("Ban co muon giao dich tiep khong? (Y/N): ");
-        scanf(" %c", &choiceContinue);
     } while (choiceContinue != 'N' && choiceContinue != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
 }
 
@@ -491,6 +545,7 @@ void transferMoney(ATMCard *card)
     double amount;
     ATMCard targetCard;
     char choice;
+    char choiceContinue;
 
     do
     {
@@ -537,25 +592,61 @@ void transferMoney(ATMCard *card)
         }
         // Hỏi người dùng có muốn thoát không
         printf("Ban co muon giao dich them khong? (Y/N): ");
-        scanf(" %c", &choice);
-    } while (choice != 'N' && choice != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
+        while ((choiceContinue = getchar()) == '\n' || choiceContinue == ' ')
+            ; // Bỏ qua các ký tự trắng và newline
+    } while (choiceContinue != 'N' && choiceContinue != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
 }
 
 void changePIN(ATMCard *card)
 {
     char newPIN[7];
-    printf("Nhap ma PIN moi (6 chu so): ");
-    scanf("%6s", newPIN);
+    char confirmPIN[7];
+    int i = 0;
+    char ch;
 
-    if (isValidPIN(newPIN))
+    // Function to get PIN input
+    void getPINInput(char *pin)
     {
-        strcpy(card->pin, newPIN);
-        printf("Doi ma PIN thanh cong!\n");
-        overwriteFile(card);
+        int i = 0;
+        char ch;
+        while (i < 6)
+        {
+            ch = getch();   // Đọc từng ký tự từ bàn phím mà không hiển thị
+            if (ch == '\r') // Dừng nếu nhấn Enter
+                break;
+
+            if (isNumber(ch)) // Kiểm tra nếu là số
+            {
+                pin[i++] = ch; // Ghi ký tự vào pin
+                putchar('*');  // Hiển thị dấu *
+            }
+        }
+        pin[i] = '\0'; // Đảm bảo chuỗi kết thúc đúng
+        printf("\n");
+    }
+
+    printf("Nhap ma PIN moi (6 chu so): ");
+    getPINInput(newPIN);
+
+    printf("Xac nhan ma PIN moi: ");
+    getPINInput(confirmPIN);
+
+    if (strcmp(newPIN, confirmPIN) == 0)
+    {
+        if (isValidPIN(newPIN))
+        {
+            strcpy(card->pin, newPIN);
+            printf("Doi ma PIN thanh cong!\n");
+            overwriteFile(card);
+        }
+        else
+        {
+            printf("Ma PIN khong hop le.\n");
+        }
     }
     else
     {
-        printf("Ma PIN khong hop le.\n");
+        printf("Ma PIN khong khop. Vui long thu lai.\n");
     }
 }
 
@@ -563,6 +654,7 @@ void depositMoney(ATMCard *card)
 {
     double depositAmount;
     char choice;
+    char choiceContinue;
 
     do
     {
@@ -588,7 +680,8 @@ void depositMoney(ATMCard *card)
             {
                 printf("Khong in bien lai.\n");
                 // Thông báo giao dịch thành công
-                printf("Gui tien thanh cong! So du hien tai: %s\n", formatCurrency(card->balance));
+                printf("Gui tien thanh cong!\n So du hien tai: %s\n", formatCurrency(card->balance));
+                waitForKeyPress();
             }
         }
         else
@@ -596,8 +689,7 @@ void depositMoney(ATMCard *card)
             printf("So tien gui khong hop le.\n");
         }
         printf("Ban co muon giao dich them khong? (Y/N): ");
-        scanf(" %c", &choice);
-    } while (choice != 'N' && choice != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
+    } while (choiceContinue != 'N' && choiceContinue != 'n'); // Nếu không chọn thoát, tiếp tục vòng lặp
 }
 
 int login(ATMCard *currentCard)
@@ -613,49 +705,18 @@ int login(ATMCard *currentCard)
     printf("===========================\n");
 
     // Nhập số tài khoản và kiểm tra
-    while (1)
+    getAccountNumber(accountNumber, 14);
+    int valid = isIDAccount(accountNumber);
+    if (!valid)
     {
-        printf("Nhap so tai khoan (14 chu so): ");
-        scanf("%s", accountNumber);
-
-        // Kiểm tra xem số tài khoản có phải là số không
-        int isValid = 1; // Biến để kiểm tra tính hợp lệ
-        for (int i = 0; i < strlen(accountNumber); i++)
-        {
-            if (accountNumber[i] < '0' || accountNumber[i] > '9')
-            {
-                isValid = 0; // Nếu có ký tự không phải số, đánh dấu không hợp lệ
-                break;
-            }
-        }
-
-        // Kiểm tra độ dài
-        if (isValid && strlen(accountNumber) == 14)
-        {
-            break; // Nếu hợp lệ, thoát khỏi vòng lặp
-        }
-        else
-        {
-            printf("So tai khoan khong hop le. Vui long nhap lai.\n");
-        }
+        printf("So tai khoan khong hop le.\n");
+        return 0;
     }
-
-    printf("Nhap ma PIN: ");
-    // Nhập PIN và hiển thị dấu *
-    for (int i = 0; i < 6; i++)
-    {
-        pin[i] = getch();   // Đọc ký tự mà không hiển thị
-        if (pin[i] == '\r') // Nếu nhấn Enter, thoát vòng lặp
-            break;
-        printf("*"); // Hiển thị dấu *
-    }
-    pin[6] = '\0'; // Kết thúc chuỗi
-    printf("\n");
+    getPIN(pin, 6);
 
     // Tải thông tin tài khoản từ file
     if (!loadFromFile(currentCard, accountNumber))
     {
-        printf("Khong the tai du lieu tu tep.\n");
         return 0;
     }
 
@@ -670,15 +731,6 @@ int login(ATMCard *currentCard)
         printf("Dang nhap that bai. Vui long kiem tra lai thong tin.\n");
     }
     return found;
-}
-
-void checkBalance(ATMCard *card)
-{
-    printf("\n=========================================\n");
-    printf("          VTC Academy Bank\n");
-    printf("=========================================\n");
-    printf("So du hien tai: %s\n", formatCurrency(card->balance)); // Sử dụng hàm formatCurrency
-    printf("-----------------------------------------\n");
 }
 
 void displayMenu(ATMCard *card)
@@ -707,44 +759,39 @@ void displayTransactionHistory(ATMCard *card)
 {
     char choice;
     // Tạo tên file dựa trên số tài khoản trong thư mục history
-    do
+    char filename[100];
+    snprintf(filename, sizeof(filename), "history/%s_transactions.dat", card->accountNumber); // Tạo tên file
+
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
     {
-        char filename[100];
-        snprintf(filename, sizeof(filename), "history/%s_transactions.dat", card->accountNumber); // Tạo tên file
+        printf("Khong co lich su giao dich nao.\n");
+        waitForKeyPress();
+        return;
+    }
 
-        FILE *file = fopen(filename, "r");
-        if (file == NULL)
-        {
-            printf("Khong co lich su giao dich nao.\n");
-            return;
-        }
+    printf("\nLich su giao dich:\n");
+    printf("========================================================================================\n");
+    printf("| %-20s | %-15s | %-25s | %-15s |\n", "Loai giao dich", "So tien", "Thoi gian", "Tai khoan dich");
+    printf("========================================================================================\n");
 
-        printf("\nLich su giao dich:\n");
-        printf("=========================================\n");
-        printf("| %-20s | %-15s | %-25s |\n", "Loai giao dich", "So tien", "Thoi gian");
-        printf("=========================================\n");
+    char line[256];
+    while (fgets(line, sizeof(line), file))
+    {
+        // Phân tích dòng để lấy thông tin
+        char type[20];
+        double amount;
+        char targetAccount[15];
+        char timestamp[30];
 
-        char line[256];
-        while (fgets(line, sizeof(line), file))
-        {
-            // Phân tích dòng để lấy thông tin
-            char type[20];
-            double amount;
-            char accountNumber[15];
-            char timestamp[30];
+        sscanf(line, "Giao dich: %[^,], So tien: %lf VND, Tai khoan: %[^,], Thoi gian: %[^\n]", type, &amount, targetAccount, timestamp);
 
-            sscanf(line, "Giao dich: %[^,], So tien: %lf VND, Tai khoan: %[^,], Thoi gian: %[^\n]", type, &amount, accountNumber, timestamp);
-
-            // In ra theo định dạng chuẩn
-            printf("| %-20s | %-15s | %-25s |\n", type, formatCurrency(amount), timestamp);
-        }
-        printf("=========================================\n");
-        fclose(file);
-
-        // Hỏi người dùng có muốn thoát không
-        printf("Ban co muon thoat? (Y/N): ");
-        scanf(" %c", &choice);
-    } while (choice != 'Y' && choice != 'y'); // Nếu không chọn thoát, tiếp tục vòng lặp
+        // In ra theo định dạng chuẩn
+        printf("| %-20s | %-15s | %-25s | %-15s |\n", type, formatCurrency(amount), timestamp, targetAccount);
+    }
+    printf("========================================================================================\n");
+    waitForKeyPress();
+    fclose(file);
 }
 
 void displayAccountInfo(ATMCard *card)
